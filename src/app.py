@@ -1,25 +1,23 @@
-import streamlit as st 
-st.set_page_config(page_title="Chat with Websites", page_icon="🤖")  
+import streamlit as st
+st.set_page_config(page_title="Chat with Websites", page_icon="🤖")
 
 import os
-import shutil  
+import shutil
 from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_community.document_loaders import WebBaseLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma
+from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.chains.retrieval import create_retrieval_chain
 from langchain.chains.history_aware_retriever import create_history_aware_retriever
 from langchain.chains.combine_documents import create_stuff_documents_chain
 
-
-
 # Load environment variables
 load_dotenv()
 
-VECTOR_DB_PATH = "./chroma_db"
+FAISS_INDEX_PATH = "./faiss_index"
 
 # ✅ Initialize session state variables
 if "chat_history" not in st.session_state:
@@ -31,13 +29,12 @@ if "vector_store" not in st.session_state:
 if "website_url" not in st.session_state:
     st.session_state.website_url = None
 
-
-# Function to create Chroma vectorstore from a website URL
+# Function to create FAISS vectorstore from a website URL
 def get_vectorstore_from_url(url):
-    """Scrapes the given URL, extracts content, and creates a Chroma vector store."""
+    """Scrapes the given URL, extracts content, and creates a FAISS vector store."""
     try:
-        shutil.rmtree(VECTOR_DB_PATH, ignore_errors=True)
-        os.makedirs(VECTOR_DB_PATH, exist_ok=True)
+        shutil.rmtree(FAISS_INDEX_PATH, ignore_errors=True)
+        os.makedirs(FAISS_INDEX_PATH, exist_ok=True)
 
         loader = WebBaseLoader(url)
         document = loader.load()
@@ -50,12 +47,11 @@ def get_vectorstore_from_url(url):
         document_chunks = text_splitter.split_documents(document)
 
         # Create vector store
-        vector_store = Chroma.from_documents(
+        vector_store = FAISS.from_documents(
             documents=document_chunks,
-            embedding=OpenAIEmbeddings(),
-            persist_directory=VECTOR_DB_PATH
+            embedding=OpenAIEmbeddings()
         )
-        vector_store.persist()  # Save vector store
+        vector_store.save_local(FAISS_INDEX_PATH)  # Save FAISS index
         st.success("Website data successfully indexed!")
 
         return vector_store
@@ -64,11 +60,10 @@ def get_vectorstore_from_url(url):
         st.error(f"Error processing website: {str(e)}")
         return None
 
-
 # Function to create a context-aware retriever
 def get_context_retriever_chain(vector_store):
     llm = ChatOpenAI()
-    retriever = vector_store.as_retriever(search_kwargs={"k": 5})  
+    retriever = vector_store.as_retriever(search_kwargs={"k": 5})
 
     prompt = ChatPromptTemplate.from_messages([
         MessagesPlaceholder(variable_name="chat_history"),
@@ -78,34 +73,31 @@ def get_context_retriever_chain(vector_store):
 
     return create_history_aware_retriever(llm, retriever, prompt)
 
-
 # Function to create a conversational RAG chain
-def get_conversational_rag_chain(retriever_chain): 
+def get_conversational_rag_chain(retriever_chain):
     llm = ChatOpenAI()
-    
+
     prompt = ChatPromptTemplate.from_messages([
         ("system", "Answer the user's questions based on the below context:\n\n{context}"),
         MessagesPlaceholder(variable_name="chat_history"),
         ("user", "{input}"),
     ])
-    
-    stuff_documents_chain = create_stuff_documents_chain(llm, prompt)
-    
-    return create_retrieval_chain(retriever_chain, stuff_documents_chain)
 
+    stuff_documents_chain = create_stuff_documents_chain(llm, prompt)
+
+    return create_retrieval_chain(retriever_chain, stuff_documents_chain)
 
 # Function to get chatbot response
 def get_response(user_input):
     retriever_chain = get_context_retriever_chain(st.session_state.vector_store)
     conversation_rag_chain = get_conversational_rag_chain(retriever_chain)
-    
+
     response = conversation_rag_chain.invoke({
         "chat_history": st.session_state.chat_history,
         "input": user_input
     })
-    
-    return response['answer']
 
+    return response['answer']
 
 # Streamlit App Configuration
 st.title("Chat with Websites")
