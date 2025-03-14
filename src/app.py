@@ -1,8 +1,5 @@
-
-
 import streamlit as st 
 st.set_page_config(page_title="Chat with Websites", page_icon="🤖")  
-
 
 import os
 import shutil  
@@ -22,18 +19,24 @@ load_dotenv()
 
 VECTOR_DB_PATH = "./chroma_db"
 
+# ✅ Initialize session state variables
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = [AIMessage(content="Hello, I am a bot. How can I help you?")]
+
+if "vector_store" not in st.session_state:
+    st.session_state.vector_store = None
+
+if "website_url" not in st.session_state:
+    st.session_state.website_url = None
+
+
 # Function to create Chroma vectorstore from a website URL
 def get_vectorstore_from_url(url):
-    """
-    Scrapes the given URL, extracts content, splits it into chunks,
-    and creates a Chroma vector store for retrieval.
-    """
+    """Scrapes the given URL, extracts content, and creates a Chroma vector store."""
     try:
-       
         shutil.rmtree(VECTOR_DB_PATH, ignore_errors=True)
         os.makedirs(VECTOR_DB_PATH, exist_ok=True)
 
-        
         loader = WebBaseLoader(url)
         document = loader.load()
         if not document:
@@ -44,13 +47,13 @@ def get_vectorstore_from_url(url):
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
         document_chunks = text_splitter.split_documents(document)
 
-        
+        # Create vector store
         vector_store = Chroma.from_documents(
             documents=document_chunks,
             embedding=OpenAIEmbeddings(),
             persist_directory=VECTOR_DB_PATH
         )
-        vector_store.persist() 
+        vector_store.persist()  # Save vector store
         st.success("Website data successfully indexed!")
 
         return vector_store
@@ -58,6 +61,7 @@ def get_vectorstore_from_url(url):
     except Exception as e:
         st.error(f"Error processing website: {str(e)}")
         return None
+
 
 # Function to create a context-aware retriever
 def get_context_retriever_chain(vector_store):
@@ -71,6 +75,7 @@ def get_context_retriever_chain(vector_store):
     ])
 
     return create_history_aware_retriever(llm, retriever, prompt)
+
 
 # Function to create a conversational RAG chain
 def get_conversational_rag_chain(retriever_chain): 
@@ -86,6 +91,7 @@ def get_conversational_rag_chain(retriever_chain):
     
     return create_retrieval_chain(retriever_chain, stuff_documents_chain)
 
+
 # Function to get chatbot response
 def get_response(user_input):
     retriever_chain = get_context_retriever_chain(st.session_state.vector_store)
@@ -98,6 +104,7 @@ def get_response(user_input):
     
     return response['answer']
 
+
 # Streamlit App Configuration
 st.title("Chat with Websites")
 
@@ -106,38 +113,26 @@ with st.sidebar:
     st.header("Settings")
     website_url = st.text_input("Website URL")
 
-if not website_url:
-    st.info("Please enter a website URL")
-else:
-    
-    if "vector_store" not in st.session_state or st.session_state.get("website_url") != website_url:
-        st.info("Fetching and indexing website data...")
+if website_url:
+    if st.session_state.website_url != website_url:  # Prevent unnecessary reprocessing
+        st.session_state.website_url = website_url
         st.session_state.vector_store = get_vectorstore_from_url(website_url)
+        if st.session_state.vector_store:
+            st.session_state.chat_history = [AIMessage(content="Hello, I am a bot. How can I help you?")]
 
-        if st.session_state.vector_store is None:
-            st.error("Failed to process website. Please check the URL.")
-        else:
-            st.session_state.website_url = website_url 
-            st.session_state.chat_history = [
-                AIMessage(content="Hello, I am a bot. How can I help you?"),
-            ]
+# Chat input and processing
+user_query = st.chat_input("Type your message here...")
 
-   
-    user_query = st.chat_input("Type your message here...")
-    if user_query:
-        if "vector_store" not in st.session_state or st.session_state.vector_store is None:
-            st.error("Vector store not initialized. Please enter a valid URL.")
-        else:
-            response = get_response(user_query)
-            st.session_state.chat_history.append(HumanMessage(content=user_query))
-            st.session_state.chat_history.append(AIMessage(content=response))
+if user_query:
+    if not st.session_state.vector_store:
+        st.error("Vector store not initialized. Please enter a valid URL first.")
+    else:
+        response = get_response(user_query)
+        st.session_state.chat_history.append(HumanMessage(content=user_query))
+        st.session_state.chat_history.append(AIMessage(content=response))
 
-            
-            retriever_chain = get_context_retriever_chain(st.session_state.vector_store)
-            retrieved_docs = retriever_chain.invoke({"chat_history": st.session_state.chat_history, "input": user_query})
-            print("🔍 Retrieved Docs:", retrieved_docs)
-
-    for message in st.session_state.chat_history:
-        role = "AI" if isinstance(message, AIMessage) else "Human"
-        with st.chat_message(role):
-            st.write(message.content)
+# Display chat messages
+for message in st.session_state.chat_history:
+    role = "AI" if isinstance(message, AIMessage) else "Human"
+    with st.chat_message(role):
+        st.write(message.content)
