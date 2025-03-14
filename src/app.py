@@ -15,11 +15,6 @@ from langchain.chains.history_aware_retriever import create_history_aware_retrie
 from langchain.chains.combine_documents import create_stuff_documents_chain
 
 
-
-__import__('pysqlite3')
-import sys
-sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
-
 # Load environment variables
 load_dotenv()
 
