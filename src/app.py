@@ -19,10 +19,10 @@ load_dotenv()
 FAISS_INDEX_PATH = "./faiss_index"
 AUDIO_PATH = "./audio_responses"  # Directory for storing audio responses
 
-# ✅ Ensure directories exist
+#  Ensure directories exist
 os.makedirs(AUDIO_PATH, exist_ok=True)
 
-# ✅ Initialize session state variables
+# Initialize session state variables
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = [AIMessage(content="Hello, I am a bot. How can I help you?")]
 
@@ -35,7 +35,14 @@ if "website_url" not in st.session_state:
 if "audio_files" not in st.session_state:
     st.session_state.audio_files = {}  # Store audio file paths for AI responses
 
-# ✅ Function to create FAISS vectorstore from a website URL
+#  Function to delete audio files
+def delete_audio_files():
+    for filename in os.listdir(AUDIO_PATH):
+        file_path = os.path.join(AUDIO_PATH, filename)
+        if os.path.isfile(file_path):
+            os.remove(file_path)
+
+#  Function to create FAISS vectorstore from a website URL
 def get_vectorstore_from_url(url):
     try:
         shutil.rmtree(FAISS_INDEX_PATH, ignore_errors=True)
@@ -63,7 +70,7 @@ def get_vectorstore_from_url(url):
         st.error(f"Error processing website: {str(e)}")
         return None
 
-# ✅ Function to create a context-aware retriever
+#  Function to create a context-aware retriever
 def get_context_retriever_chain(vector_store):
     llm = ChatOpenAI()
     retriever = vector_store.as_retriever(search_kwargs={"k": 5})
@@ -76,7 +83,7 @@ def get_context_retriever_chain(vector_store):
 
     return create_history_aware_retriever(llm, retriever, prompt)
 
-# ✅ Function to create a conversational RAG chain
+# Function to create a conversational RAG chain
 def get_conversational_rag_chain(retriever_chain):
     llm = ChatOpenAI()
 
@@ -89,7 +96,7 @@ def get_conversational_rag_chain(retriever_chain):
     stuff_documents_chain = create_stuff_documents_chain(llm, prompt)
     return create_retrieval_chain(retriever_chain, stuff_documents_chain)
 
-# ✅ Function to generate speech from text (only on demand)
+#  Function to generate speech from text
 def generate_speech(text, index):
     filename = f"response_{index}.mp3"
     filepath = os.path.join(AUDIO_PATH, filename)
@@ -100,10 +107,6 @@ def generate_speech(text, index):
         tts.save(filepath)
 
     return filepath
-
-
-
-
 
 
 def get_response(user_input):
@@ -125,14 +128,16 @@ with st.sidebar:
     website_url = st.text_input("Website URL")
 
 if website_url:
+    # Delete audio files when the website URL changes
     if st.session_state.website_url != website_url:
         st.session_state.website_url = website_url
         st.session_state.vector_store = get_vectorstore_from_url(website_url)
         if st.session_state.vector_store:
             st.session_state.chat_history = [AIMessage(content="Hello, I am a bot. How can I help you?")]
             st.session_state.audio_files = {}  # Reset stored audio files
+            delete_audio_files()  # Delete old audio files
 
-# ✅ Chat input and processing
+#  Chat input and processing
 user_query = st.chat_input("Type your message here...")
 
 if user_query:
@@ -143,7 +148,7 @@ if user_query:
         st.session_state.chat_history.append(HumanMessage(content=user_query))
         st.session_state.chat_history.append(AIMessage(content=response))
 
-# ✅ Display chat messages with Play Button for AI responses
+#  Display chat messages with Play Button for AI responses
 for index, message in enumerate(st.session_state.chat_history):
     if isinstance(message, AIMessage):
         with st.chat_message("AI"):
