@@ -2,7 +2,6 @@ import streamlit as st
 import os
 import shutil
 from dotenv import load_dotenv
-import speech_recognition as sr
 from gtts import gTTS
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_community.document_loaders import WebBaseLoader
@@ -104,17 +103,7 @@ def generate_speech(text, index):
 
 
 
-def recognize_speech():
-    recognizer = sr.Recognizer()
-    with sr.Microphone() as source:
-        st.write("Listening...")
-        audio = recognizer.listen(source)
-    try:
-        return recognizer.recognize_google(audio)
-    except sr.UnknownValueError:
-        return "Could not understand audio"
-    except sr.RequestError:
-        return "Speech recognition service unavailable"
+
 
 
 def get_response(user_input):
