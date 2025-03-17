@@ -1,6 +1,7 @@
 import streamlit as st
 import os
 import shutil
+import uuid
 from dotenv import load_dotenv
 from gtts import gTTS
 from langchain_core.messages import AIMessage, HumanMessage
@@ -19,10 +20,15 @@ load_dotenv()
 FAISS_INDEX_PATH = "./faiss_index"
 AUDIO_PATH = "./audio_responses"  # Directory for storing audio responses
 
-#  Ensure directories exist
+# Ensure directories exist
 os.makedirs(AUDIO_PATH, exist_ok=True)
 
-# Initialize session state variables
+
+
+
+
+
+# ✅ Initialize session state variables
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = [AIMessage(content="Hello, I am a bot. How can I help you?")]
 
@@ -33,16 +39,16 @@ if "website_url" not in st.session_state:
     st.session_state.website_url = None
 
 if "audio_files" not in st.session_state:
-    st.session_state.audio_files = {}  # Store audio file paths for AI responses
+    st.session_state.audio_files = []  # Store generated audio file paths
 
-#  Function to delete audio files
+# ✅ Function to delete only session-tracked audio files
 def delete_audio_files():
-    for filename in os.listdir(AUDIO_PATH):
-        file_path = os.path.join(AUDIO_PATH, filename)
+    for file_path in st.session_state.audio_files:
         if os.path.isfile(file_path):
             os.remove(file_path)
+    st.session_state.audio_files = []  # Clear the list after deletion
 
-#  Function to create FAISS vectorstore from a website URL
+# ✅ Function to create FAISS vector store from a website URL
 def get_vectorstore_from_url(url):
     try:
         shutil.rmtree(FAISS_INDEX_PATH, ignore_errors=True)
@@ -70,7 +76,7 @@ def get_vectorstore_from_url(url):
         st.error(f"Error processing website: {str(e)}")
         return None
 
-#  Function to create a context-aware retriever
+# ✅ Function to create a context-aware retriever
 def get_context_retriever_chain(vector_store):
     llm = ChatOpenAI()
     retriever = vector_store.as_retriever(search_kwargs={"k": 5})
@@ -83,7 +89,7 @@ def get_context_retriever_chain(vector_store):
 
     return create_history_aware_retriever(llm, retriever, prompt)
 
-# Function to create a conversational RAG chain
+# ✅ Function to create a conversational RAG chain
 def get_conversational_rag_chain(retriever_chain):
     llm = ChatOpenAI()
 
@@ -96,19 +102,31 @@ def get_conversational_rag_chain(retriever_chain):
     stuff_documents_chain = create_stuff_documents_chain(llm, prompt)
     return create_retrieval_chain(retriever_chain, stuff_documents_chain)
 
-#  Function to generate speech from text
-def generate_speech(text, index):
-    filename = f"response_{index}.mp3"
+# ✅ Function to generate unique speech file
+def generate_speech(text):
+    unique_id = uuid.uuid4().hex  # Generate a unique identifier
+    filename = f"response_{unique_id}.mp3"  # Unique filename
     filepath = os.path.join(AUDIO_PATH, filename)
 
-    # Generate TTS file only if it doesn't exist
-    if not os.path.exists(filepath):
+    try:
+        # Generate TTS file
         tts = gTTS(text=text, lang="en")
         tts.save(filepath)
+        st.session_state.audio_files.append(filepath)  # Store in session state
+        return filepath
+    except Exception as e:
+        st.error(f"Error generating speech: {str(e)}")
+        return None
+    
 
-    return filepath
 
 
+
+
+
+
+
+# ✅ Function to get AI response
 def get_response(user_input):
     retriever_chain = get_context_retriever_chain(st.session_state.vector_store)
     conversation_rag_chain = get_conversational_rag_chain(retriever_chain)
@@ -121,24 +139,25 @@ def get_response(user_input):
     return response['answer']
 
 
-st.title("WEBWHISPER - Talk to Websites!")
+# ✅ Streamlit UI
+st.title("WEBWHISPER - Talk to Websites! ")
+st.markdown("<hr>", unsafe_allow_html=True)
 
 
 with st.sidebar:
-    website_url = st.text_input("Website URL")
+    website_url = st.text_input("🔗 Enter Website URL")
 
 if website_url:
-    # Delete audio files when the website URL changes
+    # Delete only session audio files when the website URL changes
     if st.session_state.website_url != website_url:
         st.session_state.website_url = website_url
+        delete_audio_files()  # Delete only session-tracked audio files
         st.session_state.vector_store = get_vectorstore_from_url(website_url)
         if st.session_state.vector_store:
             st.session_state.chat_history = [AIMessage(content="Hello, I am a bot. How can I help you?")]
-            st.session_state.audio_files = {}  # Reset stored audio files
-            delete_audio_files()  # Delete old audio files
 
-#  Chat input and processing
-user_query = st.chat_input("Type your message here...")
+# ✅ Chat input and processing
+user_query = st.chat_input("💬 Type your message here...")
 
 if user_query:
     if not st.session_state.vector_store:
@@ -148,16 +167,20 @@ if user_query:
         st.session_state.chat_history.append(HumanMessage(content=user_query))
         st.session_state.chat_history.append(AIMessage(content=response))
 
-#  Display chat messages with Play Button for AI responses
+# ✅ Display chat messages with "Play" button for AI responses
 for index, message in enumerate(st.session_state.chat_history):
     if isinstance(message, AIMessage):
         with st.chat_message("AI"):
             st.write(message.content)
 
-            # "Play" button to generate and play TTS only when clicked
+            # 🎯 "Play" button to generate and play TTS only when clicked
             if st.button(f"▶️ Play", key=f"play_{index}"):
-                audio_file = generate_speech(message.content, index)
-                st.audio(audio_file, format="audio/mp3")
+                audio_file = generate_speech(message.content)  # Generate audio only on button click
+                if audio_file:
+                    st.audio(audio_file, format="audio/mp3")
+                else:
+                    st.error("Failed to generate audio.")
+
     elif isinstance(message, HumanMessage):
         with st.chat_message("Human"):
             st.write(message.content)
