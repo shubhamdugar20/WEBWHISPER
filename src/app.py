@@ -175,6 +175,7 @@ for index, message in enumerate(st.session_state.chat_history):
 
             # 🎯 "Play" button to generate and play TTS only when clicked
             if st.button(f"▶️ Play", key=f"play_{index}"):
+                delete_audio_files()
                 audio_file = generate_speech(message.content)  # Generate audio only on button click
                 if audio_file:
                     st.audio(audio_file, format="audio/mp3")
