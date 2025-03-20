@@ -13,6 +13,14 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.chains.retrieval import create_retrieval_chain
 from langchain.chains.history_aware_retriever import create_history_aware_retriever
 from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain.chains.summarize import load_summarize_chain
+from langchain.chat_models import ChatOpenAI
+from langchain.chains.summarize import load_summarize_chain
+
+import asyncio
+from langchain.chat_models import ChatOpenAI
+
+
 
 # Load environment variables
 load_dotenv()
@@ -28,9 +36,13 @@ os.makedirs(AUDIO_PATH, exist_ok=True)
 
 
 
+
+
+
+
 # ✅ Initialize session state variables
 if "chat_history" not in st.session_state:
-    st.session_state.chat_history = [AIMessage(content="Hello, I am a bot. How can I help you?")]
+    st.session_state.chat_history = [AIMessage(content="Hello there !!. Please enter a Web URL for starting the chat.")]
 
 if "vector_store" not in st.session_state:
     st.session_state.vector_store = None
@@ -40,6 +52,16 @@ if "website_url" not in st.session_state:
 
 if "audio_files" not in st.session_state:
     st.session_state.audio_files = []  # Store generated audio file paths
+if "summary" not in st.session_state:
+    st.session_state.summary = None
+      
+
+
+
+
+
+
+
 
 # ✅ Function to delete only session-tracked audio files
 def delete_audio_files():
@@ -49,6 +71,24 @@ def delete_audio_files():
     st.session_state.audio_files = []  # Clear the list after deletion
 
 # ✅ Function to create FAISS vector store from a website URL
+
+
+async def generate_summary_async(document_chunks):
+    llm = ChatOpenAI(model_name="gpt-3.5-turbo")  # Use OpenAI API efficiently
+    summarize_chain = load_summarize_chain(llm, chain_type="map_reduce")
+
+    # Process chunks asynchronously for faster execution
+    summary = await summarize_chain.ainvoke(document_chunks)
+    
+    return summary["output_text"].strip()
+
+# Run the async function
+def generate_summary(document_chunks):
+    return asyncio.run(generate_summary_async(document_chunks))
+
+
+
+# Function to create FAISS vector store from a website URL
 def get_vectorstore_from_url(url):
     try:
         shutil.rmtree(FAISS_INDEX_PATH, ignore_errors=True)
@@ -67,14 +107,18 @@ def get_vectorstore_from_url(url):
             documents=document_chunks,
             embedding=OpenAIEmbeddings()
         )
-        vector_store.save_local(FAISS_INDEX_PATH)  
-        st.success("Website data successfully indexed!")
+        vector_store.save_local(FAISS_INDEX_PATH)
+       
+
+        # Generate summary
+        st.session_state.summary = generate_summary(document_chunks)
+        ##st.session_state.chat_history.append(AIMessage(content=f"Website Summary: {summary}"))
 
         return vector_store
-
     except Exception as e:
         st.error(f"Error processing website: {str(e)}")
         return None
+
 
 # ✅ Function to create a context-aware retriever
 def get_context_retriever_chain(vector_store):
@@ -89,7 +133,7 @@ def get_context_retriever_chain(vector_store):
 
     return create_history_aware_retriever(llm, retriever, prompt)
 
-# ✅ Function to create a conversational RAG chain
+
 def get_conversational_rag_chain(retriever_chain):
     llm = ChatOpenAI()
 
@@ -139,9 +183,37 @@ def get_response(user_input):
     return response['answer']
 
 
-# ✅ Streamlit UI
-st.title("WEBWHISPER - Talk to Websites! ")
-st.markdown("<hr>", unsafe_allow_html=True)
+
+
+st.markdown(
+    """
+    <style>
+        .title-container {
+            text-align: center;
+            padding: 10px;
+            margin-bottom: 20px; /* Added space below the title */
+        }
+        .title {
+            font-size: 32px;  /* Slightly increased font size */
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            padding: 8px;
+            border-bottom: 2px solid white;
+            box-shadow: 0px 2px 6px rgba(255, 255, 255, 0.2);
+            display: inline-block;
+        }
+    </style>
+    <div class="title-container">
+        <span class="title">WEBWHISPER - Talk to Websites!</span>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+
+
+
 
 
 with st.sidebar:
@@ -154,14 +226,18 @@ if website_url:
         delete_audio_files()  # Delete only session-tracked audio files
         st.session_state.vector_store = get_vectorstore_from_url(website_url)
         if st.session_state.vector_store:
-            st.session_state.chat_history = [AIMessage(content="Hello, I am a bot. How can I help you?")]
+           st.session_state.chat_history = [
+    AIMessage(content="SUMMARY   :  " + st.session_state.summary + "\n\n"
+                       "Please feel free to ask any queries regarding this Website!\n")
+]
+
 
 # ✅ Chat input and processing
 user_query = st.chat_input("💬 Type your message here...")
 
 if user_query:
     if not st.session_state.vector_store:
-        st.error("Vector store not initialized. Please enter a valid URL first.")
+        st.error("Cant fetch Data . Please enter a valid URL first.")
     else:
         response = get_response(user_query)
         st.session_state.chat_history.append(HumanMessage(content=user_query))
@@ -174,7 +250,7 @@ for index, message in enumerate(st.session_state.chat_history):
             st.write(message.content)
 
             # 🎯 "Play" button to generate and play TTS only when clicked
-            if st.button(f"▶️ Play", key=f"play_{index}"):
+            if st.button(f"▶️ listen", key=f"play_{index}"):
                 delete_audio_files()
                 audio_file = generate_speech(message.content)  # Generate audio only on button click
                 if audio_file:
