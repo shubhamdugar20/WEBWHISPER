@@ -63,8 +63,5 @@ Try the app here: [WEBWHISPER Live](https://webwhisper.streamlit.app/)
 ## Contributing
 Pull requests are welcome! Feel free to fork and submit improvements.
 
-## License
-This project is licensed under the MIT License.
-
 ## Contact
-For questions or feedback, reach out at [your email].
+For questions or feedback, reach out at shubhamdugar20@gmaiil.com
