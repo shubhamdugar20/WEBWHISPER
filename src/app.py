@@ -54,7 +54,9 @@ if "audio_files" not in st.session_state:
     st.session_state.audio_files = []  # Store generated audio file paths
 if "summary" not in st.session_state:
     st.session_state.summary = None
-      
+
+if "document_chunks" not in st.session_state:
+    st.session_state.document_chunks = None      
 
 
 
@@ -74,7 +76,7 @@ def delete_audio_files():
 
 
 async def generate_summary_async(document_chunks):
-    llm = ChatOpenAI(model_name="gpt-3.5-turbo")  # Use OpenAI API efficiently
+    llm = ChatOpenAI()  # Use OpenAI API efficiently
     summarize_chain = load_summarize_chain(llm, chain_type="map_reduce")
 
     # Process chunks asynchronously for faster execution
@@ -101,17 +103,17 @@ def get_vectorstore_from_url(url):
             return None
 
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-        document_chunks = text_splitter.split_documents(document)
+        st.session_state.document_chunks = text_splitter.split_documents(document)
 
         vector_store = FAISS.from_documents(
-            documents=document_chunks,
+            documents=st.session_state.document_chunks,
             embedding=OpenAIEmbeddings()
         )
         vector_store.save_local(FAISS_INDEX_PATH)
        
 
         # Generate summary
-        st.session_state.summary = generate_summary(document_chunks)
+        
         ##st.session_state.chat_history.append(AIMessage(content=f"Website Summary: {summary}"))
 
         return vector_store
@@ -231,6 +233,7 @@ if website_url:
 ] 
         
     if st.button("Generate Summary"):
+            st.session_state.summary=generate_summary(st.session_state.document_chunks)
             st.session_state.chat_history.append(AIMessage(content="SUMMARY:\n" + st.session_state.summary))
            
 
