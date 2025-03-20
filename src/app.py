@@ -194,7 +194,7 @@ st.markdown(
             margin-bottom: 20px; /* Added space below the title */
         }
         .title {
-            font-size: 32px;  /* Slightly increased font size */
+            font-size: 36px;  /* Slightly increased font size */
             font-weight: bold;
             text-transform: uppercase;
             letter-spacing: 1.5px;
@@ -227,9 +227,12 @@ if website_url:
         st.session_state.vector_store = get_vectorstore_from_url(website_url)
         if st.session_state.vector_store:
            st.session_state.chat_history = [
-    AIMessage(content="SUMMARY   :  " + st.session_state.summary + "\n\n"
-                       "Please feel free to ask any queries regarding this Website!\n")
-]
+    AIMessage(content="Fetched Data from the Website URL successfully ! . Please feel free to ask any queries regarding this Website!\n")
+] 
+        
+    if st.button("Generate Summary"):
+            st.session_state.chat_history.append(AIMessage(content="SUMMARY:\n" + st.session_state.summary))
+           
 
 
 # ✅ Chat input and processing
