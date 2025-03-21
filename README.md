@@ -9,6 +9,7 @@ WEBWHISPER is a Streamlit-based chatbot that allows users to interact with any w
 - 🗂 **FAISS Vector Storage** - Efficiently indexes and retrieves website content.
 - 🎤 **Text-to-Speech (TTS)** - Converts AI responses into speech.
 - 🔄 **Context-Aware Chat** - Keeps track of conversation history for better responses.
+- 📝 **Generate Summary** - Click the "Generate Summary" button to summarize the website content.
 
 ## Installation
 
